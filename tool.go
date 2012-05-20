@@ -2,10 +2,10 @@
 package tool
 
 import (
-	"strings"
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // Defines an Build command.
