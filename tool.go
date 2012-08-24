@@ -20,6 +20,14 @@ type Options struct {
 	GcFlags     string
 	LdFlags     string
 	Tags        string
+	Verbose     bool
+}
+
+type CommandError struct {
+	command string
+	options *Options
+	out     []byte
+	err     []byte
 }
 
 // Default fallback.
@@ -38,6 +46,19 @@ func goBin(explicit string) (string, error) {
 		return "", fmt.Errorf("Error finding go binary: %s", err)
 	}
 	return goBinFallback, nil
+}
+
+func (e *CommandError) Error() string {
+	return fmt.Sprintf(
+		"%s Failed %+v: %s\n%s", strings.Title(e.command), e.options, e.out, e.err)
+}
+
+func (e *CommandError) StdErr() []byte {
+	return e.err
+}
+
+func (e *CommandError) StdOut() []byte {
+	return e.out
 }
 
 func (o *Options) Command(command string) (affected []string, err error) {
@@ -66,6 +87,9 @@ func (o *Options) Command(command string) (affected []string, err error) {
 	if o.Tags != "" {
 		args = append(args, "-tags", o.Tags)
 	}
+	if o.Verbose {
+		args = append(args, "-v")
+	}
 	for _, importPath := range o.ImportPaths {
 		args = append(args, importPath)
 	}
@@ -74,18 +98,24 @@ func (o *Options) Command(command string) (affected []string, err error) {
 		return nil, err
 	}
 	cmd := exec.Command(bin, args...)
-	bufOut := bytes.NewBuffer([]byte{})
-	bufErr := bytes.NewBuffer([]byte{})
-	cmd.Stdout = bufOut
-	cmd.Stderr = bufErr
+	var bufOut, bufErr bytes.Buffer
+	cmd.Stdout = &bufOut
+	cmd.Stderr = &bufErr
 	err = cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf(
-			"%s Failed %+v: %s\n%s", strings.Title(command), o, bufOut, bufErr)
+		return nil, &CommandError{
+			command: command,
+			options: o,
+			out:     bufOut.Bytes(),
+			err:     bufErr.Bytes(),
+		}
 	}
-	affectedBytes := bytes.Split(bufOut.Bytes(), []byte("\n"))
+	affectedBytes := bytes.Split(bufErr.Bytes(), []byte("\n"))
 	affected = make([]string, 0, len(affectedBytes))
 	for _, importPath := range affectedBytes {
+		if len(importPath) == 0 {
+			continue
+		}
 		affected = append(affected, string(importPath))
 	}
 	return affected, nil
