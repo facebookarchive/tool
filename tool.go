@@ -24,10 +24,9 @@ type Options struct {
 }
 
 type CommandError struct {
-	command string
-	options *Options
-	out     []byte
-	err     []byte
+	fullCommand string
+	out         []byte
+	err         []byte
 }
 
 // Default fallback.
@@ -50,7 +49,11 @@ func goBin(explicit string) (string, error) {
 
 func (e *CommandError) Error() string {
 	return fmt.Sprintf(
-		"%s Failed %+v: %s\n%s", strings.Title(e.command), e.options, e.out, e.err)
+		"error executing: %s:\n%s\n%s",
+		e.fullCommand,
+		e.err,
+		bytes.TrimSpace(e.out),
+	)
 }
 
 func (e *CommandError) StdErr() []byte {
@@ -104,10 +107,9 @@ func (o *Options) Command(command string) (affected []string, err error) {
 	err = cmd.Run()
 	if err != nil {
 		return nil, &CommandError{
-			command: command,
-			options: o,
-			out:     bufOut.Bytes(),
-			err:     bufErr.Bytes(),
+			fullCommand: bin + " " + strings.Join(args, " "),
+			out:         bufOut.Bytes(),
+			err:         bufErr.Bytes(),
 		}
 	}
 	affectedBytes := bytes.Split(bufErr.Bytes(), []byte("\n"))
