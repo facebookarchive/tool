@@ -5,7 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"strings"
+
+	"github.com/facebookgo/runcmd"
 )
 
 // Defines an Build command.
@@ -21,12 +22,6 @@ type Options struct {
 	LdFlags     string
 	Tags        string
 	Verbose     bool
-}
-
-type CommandError struct {
-	fullCommand string
-	out         []byte
-	err         []byte
 }
 
 // Default fallback.
@@ -45,23 +40,6 @@ func goBin(explicit string) (string, error) {
 		return "", fmt.Errorf("Error finding go binary: %s", err)
 	}
 	return goBinFallback, nil
-}
-
-func (e *CommandError) Error() string {
-	return fmt.Sprintf(
-		"error executing: %s:\n%s\n%s",
-		e.fullCommand,
-		e.err,
-		bytes.TrimSpace(e.out),
-	)
-}
-
-func (e *CommandError) StdErr() []byte {
-	return e.err
-}
-
-func (e *CommandError) StdOut() []byte {
-	return e.out
 }
 
 func (o *Options) Command(command string) (affected []string, err error) {
@@ -100,19 +78,11 @@ func (o *Options) Command(command string) (affected []string, err error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command(bin, args...)
-	var bufOut, bufErr bytes.Buffer
-	cmd.Stdout = &bufOut
-	cmd.Stderr = &bufErr
-	err = cmd.Run()
+	streams, err := runcmd.Run(exec.Command(bin, args...))
 	if err != nil {
-		return nil, &CommandError{
-			fullCommand: bin + " " + strings.Join(args, " "),
-			out:         bufOut.Bytes(),
-			err:         bufErr.Bytes(),
-		}
+		return nil, err
 	}
-	affectedBytes := bytes.Split(bufErr.Bytes(), []byte("\n"))
+	affectedBytes := bytes.Split(streams.Stderr().Bytes(), []byte("\n"))
 	affected = make([]string, 0, len(affectedBytes))
 	for _, importPath := range affectedBytes {
 		if len(importPath) == 0 {
