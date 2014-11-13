@@ -9,7 +9,7 @@ import (
 	"github.com/facebookgo/runcmd"
 )
 
-// Defines an Build command.
+// Defines a Build command.
 type Options struct {
 	GoBin       string
 	ImportPaths []string
